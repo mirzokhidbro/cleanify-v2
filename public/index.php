@@ -3,24 +3,14 @@
 declare(strict_types=1);
 
 use App\Application\Common\Response\ApiResponse;
-use App\Application\LeadStatus\Command\CreateLeadStatus;
-use App\Application\LeadStatus\Command\CreateLeadStatusHandler;
-use App\Application\LeadStatus\Command\EditLeadStatus;
-use App\Application\LeadStatus\Command\EditLeadStatusHandler;
-use App\Application\LeadStatus\Command\DeleteLeadStatus;
-use App\Application\LeadStatus\Command\DeleteLeadStatusHandler;
-use App\Application\LeadStatus\Query\GetLeadStatus;
-use App\Application\LeadStatus\Query\GetLeadStatusHandler;
-use App\Application\LeadStatus\Query\GetLeadStatusListQuery;
-use App\Application\LeadStatus\Query\GetLeadStatusListHandler;
+use App\Application\Lead\Controller\LeadController;
+use App\Application\LeadStatus\Controller\LeadStatusController;
 use App\Domain\LeadStatus\LeadStatusRepositoryInterface;
 use App\Infrastructure\Persistence\DoctrineLeadStatusRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\EntityManager;
-use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use RuntimeException;
 use Slim\Factory\AppFactory;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -32,28 +22,36 @@ $container = new \App\Core\Container\Container();
 
 // EntityManager'ni container'ga qo'shish
 $container->set(EntityManagerInterface::class, function() {
-    // EntityManager configuration
     $config = ORMSetup::createAttributeMetadataConfiguration(
         paths: [__DIR__ . '/../src/Domain'],
-        isDevMode: true
+        isDevMode: true,
     );
 
     $connection = [
-        'driver'   => $_ENV['DB_DRIVER'],
-        'host'     => $_ENV['DB_HOST'],
-        'port'     => $_ENV['DB_PORT'],
-        'dbname'   => $_ENV['DB_NAME'],
-        'user'     => $_ENV['DB_USER'],
-        'password' => $_ENV['DB_PASSWORD']
+        'driver' => $_ENV['DB_DRIVER'],
+        'host' => $_ENV['DB_HOST'],
+        'port' => $_ENV['DB_PORT'],
+        'dbname' => $_ENV['DB_NAME'],
+        'user' => $_ENV['DB_USER'],
+        'password' => $_ENV['DB_PASSWORD'],
     ];
 
     return EntityManager::create($connection, $config);
 });
 
-
 $container->set(
     LeadStatusRepositoryInterface::class, 
     DoctrineLeadStatusRepository::class
+);
+
+$container->set(
+    \App\Domain\Lead\LeadRepositoryInterface::class,
+    \App\Infrastructure\Persistence\DoctrineLeadRepository::class
+);
+
+$container->set(
+    \App\Domain\Comment\CommentRepositoryInterface::class,
+    \App\Infrastructure\Persistence\DoctrineCommentRepository::class
 );
 
 $container = new class($container) implements \Psr\Container\ContainerInterface {
@@ -64,7 +62,7 @@ $container = new class($container) implements \Psr\Container\ContainerInterface 
     }
     
     public function has(string $id): bool {
-        return true; // Simplistic implementation
+        return true;
     }
 };
 
@@ -73,14 +71,36 @@ $app = AppFactory::create();
 
 $app->addRoutingMiddleware();
 
+// Add routes
+$app->group('/api/v2', function ($group) {
+    // Lead Status routes
+    $group->group('/lead-status', function ($group) {
+        $group->get('', [LeadStatusController::class, 'index']);
+        $group->get('/{id}', [LeadStatusController::class, 'show']);
+        $group->post('', [LeadStatusController::class, 'store']);
+        $group->put('/{id}', [LeadStatusController::class, 'update']);
+        $group->delete('/{id}', [LeadStatusController::class, 'destroy']);
+    });
+
+    // Lead routes
+    $group->group('/leads', function ($group) {
+        $group->get('', [LeadController::class, 'index']);
+        $group->post('', [LeadController::class, 'store']);
+        $group->get('/{id}', [LeadController::class, 'show']);
+        $group->put('/{id}', [LeadController::class, 'update']);
+        $group->delete('/{id}', [LeadController::class, 'destroy']);
+        $group->post('/add-comment', [LeadController::class, 'addComment']);
+    });
+});
+
 // Error handling
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 
 // Global error handler
 $errorMiddleware->setErrorHandler(
-    Throwable::class,
+    \Throwable::class,
     function (
-        Psr\Http\Message\ServerRequestInterface $request,
+        Request $request,
         Throwable $exception,
         bool $displayErrorDetails,
         bool $logErrors,
@@ -104,135 +124,7 @@ $errorMiddleware->setErrorHandler(
     }
 );
 
-$app->get('/api/v2/lead-status', function (Request $request, Response $response) use ($container) {
-    try {
-        $params = $request->getQueryParams();
-        $companyId = $params['company_id'] ?? throw new RuntimeException('Company ID is required');
-        
-        $handler = $container->get(GetLeadStatusListHandler::class);
-        $query = new GetLeadStatusListQuery($companyId);
-        
-        $result = $handler->handle($query);
-        
-        $apiResponse = ApiResponse::success($result);
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response->withHeader('Content-Type', 'application/json');
-    } catch (\Exception $e) {
-        $apiResponse = ApiResponse::error($e->getMessage());
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(400);
-    }
-});
-
-$app->get('/api/v2/lead-status/{id}', function (Request $request, Response $response, array $args) use ($container) {
-    try {
-        $handler = $container->get(GetLeadStatusHandler::class);
-        $query = new GetLeadStatus((int) $args['id']);
-        
-        $result = $handler->handle($query);
-        
-        $apiResponse = ApiResponse::success($result);
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response->withHeader('Content-Type', 'application/json');
-    } catch (\Exception $e) {
-        $apiResponse = ApiResponse::error($e->getMessage());
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(400);
-    }
-});
-
-$app->post('/api/v2/lead-status', function (Request $request, Response $response) use ($container) {
-    try {
-        $data = json_decode($request->getBody()->getContents(), true);
-        
-        $handler = $container->get(CreateLeadStatusHandler::class);
-        $command = new CreateLeadStatus(
-            $data['name'] ?? throw new RuntimeException('Name is required'),
-            $data['company_id'] ?? throw new RuntimeException('Company ID is required'),
-            $data['order'] ?? throw new RuntimeException('Order is required')
-        );
-        
-        $handler->handle($command);
-        
-        $apiResponse = ApiResponse::success(null, 'Lead status created successfully');
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withStatus(201)
-            ->withHeader('Content-Type', 'application/json');
-    } catch (\Exception $e) {
-        $apiResponse = ApiResponse::error($e->getMessage());
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(400);
-    }
-});
-
-// Edit lead status
-$app->put('/api/v2/lead-status/{id}', function (Request $request, Response $response, array $args) use ($container) {
-    try {
-        $id = (int) $args['id'];
-        $data = json_decode($request->getBody()->getContents(), true);
-        
-        $handler = $container->get(EditLeadStatusHandler::class);
-        $command = new EditLeadStatus(
-            $id,
-            $data['name'] ?? throw new RuntimeException('Name is required')
-        );
-        
-        $handler->handle($command);
-        
-        $apiResponse = ApiResponse::success(null, 'Lead status updated successfully');
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json');
-    } catch (\Exception $e) {
-        $apiResponse = ApiResponse::error($e->getMessage());
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(400);
-    }
-});
-
-// Delete lead status
-$app->delete('/api/v2/lead-status/{id}', function (Request $request, Response $response, array $args) use ($container) {
-    try {
-        $id = (int) $args['id'];
-        
-        $handler = $container->get(DeleteLeadStatusHandler::class);
-        $command = new DeleteLeadStatus($id);
-        
-        $handler->handle($command);
-        
-        $apiResponse = ApiResponse::success(null, 'Lead status deleted successfully');
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json');
-    } catch (\Exception $e) {
-        $apiResponse = ApiResponse::error($e->getMessage());
-        
-        $response->getBody()->write(json_encode($apiResponse));
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus(400);
-    }
-});
-
-// 404 handler - eng oxirida qo'shilishi kerak
+// 404 handler
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function ($request, $response) {
     $apiResponse = ApiResponse::error('Route not found', [
         'method' => $request->getMethod(),
