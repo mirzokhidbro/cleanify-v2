@@ -18,6 +18,6 @@ class DeleteLeadStatusHandler
         $leadStatus = $this->repository->findById($command->id)
             ?? throw new RuntimeException('Lead status not found');
 
-        $this->repository->delete($leadStatus->getId());
+        $this->repository->delete($leadStatus->id);
     }
 }

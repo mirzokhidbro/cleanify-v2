@@ -89,7 +89,8 @@ class LeadStatusController
             
             $command = new EditLeadStatus(
                 $id,
-                $data['name'] ?? throw new RuntimeException('Name is required')
+                $data['name'] ?? throw new RuntimeException('Name is required'),
+                $data['color'] ?? null
             );
             
             $this->editHandler->handle($command);

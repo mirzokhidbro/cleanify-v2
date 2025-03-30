@@ -8,14 +8,16 @@ class LeadStatusDTO
 {
     public function __construct(
         public readonly int $id,
-        public readonly string $name
+        public readonly string $name,
+        public readonly ?string $color = null
     ) {}
 
     public static function fromEntity(\App\Domain\LeadStatus\LeadStatus $status): self
     {
         return new self(
-            $status->getId() ?? 0,
-            $status->getName()
+            $status->id ?? 0,
+            $status->name,
+            $status->color
         );
     }
 }

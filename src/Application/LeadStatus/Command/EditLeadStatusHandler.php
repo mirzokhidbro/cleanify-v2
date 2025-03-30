@@ -18,7 +18,7 @@ class EditLeadStatusHandler
         $leadStatus = $this->repository->findById($command->id)
             ?? throw new RuntimeException('Lead status not found');
 
-        $leadStatus->edit($command->name);
+        $leadStatus->edit($command->name, $command->color);
         
         $this->repository->save($leadStatus);
     }

@@ -21,23 +21,27 @@ $dotenv->load();
 $container = new \App\Core\Container\Container();
 
 // EntityManager'ni container'ga qo'shish
-$container->set(EntityManagerInterface::class, function() {
-    $config = ORMSetup::createAttributeMetadataConfiguration(
-        paths: [__DIR__ . '/../src/Domain'],
-        isDevMode: true,
-    );
+// Create EntityManager
+$config = ORMSetup::createAttributeMetadataConfiguration(
+    paths: [__DIR__ . '/../src/Domain'],
+    isDevMode: true,
+);
 
-    $connection = [
-        'driver' => $_ENV['DB_DRIVER'],
-        'host' => $_ENV['DB_HOST'],
-        'port' => $_ENV['DB_PORT'],
-        'dbname' => $_ENV['DB_NAME'],
-        'user' => $_ENV['DB_USER'],
-        'password' => $_ENV['DB_PASSWORD'],
-    ];
+$connection = [
+    'driver' => $_ENV['DB_DRIVER'],
+    'host' => $_ENV['DB_HOST'],
+    'port' => (int)$_ENV['DB_PORT'],
+    'dbname' => $_ENV['DB_NAME'],
+    'user' => $_ENV['DB_USER'],
+    'password' => $_ENV['DB_PASSWORD'],
+    'charset' => 'utf8'
+];
 
-    return EntityManager::create($connection, $config);
-});
+$entityManager = EntityManager::create($connection, $config);
+
+// Add to container
+$container->set(EntityManagerInterface::class, $entityManager);
+$container->set(EntityManager::class, $entityManager);
 
 $container->set(
     LeadStatusRepositoryInterface::class, 
@@ -52,6 +56,11 @@ $container->set(
 $container->set(
     \App\Domain\Comment\CommentRepositoryInterface::class,
     \App\Infrastructure\Persistence\DoctrineCommentRepository::class
+);
+
+$container->set(
+    \App\Domain\Salary\SalaryRepositoryInterface::class,
+    \App\Infrastructure\Persistence\DoctrineSalaryRepository::class
 );
 
 $container = new class($container) implements \Psr\Container\ContainerInterface {
@@ -72,26 +81,8 @@ $app = AppFactory::create();
 $app->addRoutingMiddleware();
 
 // Add routes
-$app->group('/api/v2', function ($group) {
-    // Lead Status routes
-    $group->group('/lead-status', function ($group) {
-        $group->get('', [LeadStatusController::class, 'index']);
-        $group->get('/{id}', [LeadStatusController::class, 'show']);
-        $group->post('', [LeadStatusController::class, 'store']);
-        $group->put('/{id}', [LeadStatusController::class, 'update']);
-        $group->delete('/{id}', [LeadStatusController::class, 'destroy']);
-    });
-
-    // Lead routes
-    $group->group('/leads', function ($group) {
-        $group->get('', [LeadController::class, 'index']);
-        $group->post('', [LeadController::class, 'store']);
-        $group->get('/{id}', [LeadController::class, 'show']);
-        $group->put('/{id}', [LeadController::class, 'update']);
-        $group->delete('/{id}', [LeadController::class, 'destroy']);
-        $group->post('/add-comment', [LeadController::class, 'addComment']);
-    });
-});
+$routes = require __DIR__ . '/../routes/api.php';
+$routes($app);
 
 // Error handling
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);

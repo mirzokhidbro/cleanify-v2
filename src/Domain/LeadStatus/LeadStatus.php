@@ -10,50 +10,44 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'lead_statuses')]
 class LeadStatus
 {
-    public function __construct(
-        #[ORM\Column(type: 'string', length: 255)]
-        private string $name,
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column(type: 'integer')]
+    public ?int $id = null;
 
-        #[ORM\Column(name: 'company_id', type: 'string', length: 255)]
-        private string $companyId,
+    #[ORM\Column(type: 'string', length: 255)]
+    public string $name;
 
-        #[ORM\Column(name: '"order"', type: 'integer')]
-        private int $sortOrder,
+    #[ORM\Column(name: 'company_id', type: 'string', length: 255)]
+    public string $companyId;
 
-        #[ORM\Id]
-        #[ORM\GeneratedValue]
-        #[ORM\Column(type: 'integer')]
-        private ?int $id = null
-    ) {}
+    #[ORM\Column(name: 'color', type: 'string', length: 255, nullable: true)]
+    public ?string $color = null;
 
-    public static function create(string $name, string $companyId, int $sortOrder): self
+    #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
+    public \DateTimeImmutable $createdAt;
+
+    public function __construct()
     {
-        return new self($name, $companyId, $sortOrder);
+        $this->createdAt = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tashkent'));
     }
 
-    public function getId(): ?int
-    {
-        return $this->id;
+    public static function create(
+        string $name,
+        string $companyId
+    ): self {
+        $status = new self();
+        $status->name = $name;
+        $status->companyId = $companyId;
+
+        return $status;
     }
 
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-
-
-    public function isNew(): bool
-    {
-        return $this->id === null;
-    }
-
-    public function edit(string $name): void
-    {
-        if (empty($name)) {
-            throw new \InvalidArgumentException('Name cannot be empty');
-        }
-        
+    public function edit(
+        string $name,
+        ?string $color = null
+    ): void {
         $this->name = $name;
+        $this->color = $color;
     }
 }

@@ -16,38 +16,39 @@ class Lead
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    private int $id;
+    public int $id;
 
     #[ORM\Column(name: 'company_id')]
-    private string $companyId;
+    public string $companyId;
 
     #[ORM\Column(nullable: true)]
-    private ?string $name = null;
+    public ?string $name = null;
 
     #[ORM\Column(nullable: true)]
-    private ?string $address = null;
+    public ?string $address = null;
 
     #[ORM\Column(name: 'phone_number')]
-    private string $phoneNumber;
+    public string $phoneNumber;
 
     #[ORM\Column(nullable: true)]
-    private ?string $source = null;
+    public ?string $source = null;
 
     #[ORM\Column]
-    private int $status;
+    public int $status;
 
     #[ORM\Column(name: 'created_at', nullable: true)]
-    private ?\DateTimeImmutable $createdAt = null;
+    public ?\DateTimeImmutable $createdAt = null;
 
     /**
      * @var Collection<int, Comment>
      */
     #[ORM\OneToMany(targetEntity: Comment::class, mappedBy: 'lead')]
-    private Collection $comments;
+    public Collection $comments;
 
-    private function __construct()
+    public function __construct()
     {
         $this->comments = new ArrayCollection();
+        $this->createdAt = new \DateTimeImmutable();
     }
 
     public static function create(

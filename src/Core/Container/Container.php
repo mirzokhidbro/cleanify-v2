@@ -37,34 +37,65 @@ class Container
         return $concrete;
     }
 
-    private function resolve(string $concrete): object
+    private function resolve(string $concrete): mixed
     {
-        $reflector = new ReflectionClass($concrete);
-        
-        $constructor = $reflector->getConstructor();
-        
-        if (!$constructor) {
-            return new $concrete();
-        }
-
-        $parameters = $constructor->getParameters();
-        $dependencies = [];
-
-        foreach ($parameters as $parameter) {
-            $type = $parameter->getType();
+        try {
+            $reflector = new ReflectionClass($concrete);
             
-            if (!$type) {
-                throw new RuntimeException(
-                    "Cannot resolve parameter {$parameter->getName()} without type hint"
-                );
+            if (!$reflector->isInstantiable()) {
+                throw new RuntimeException("Class $concrete is not instantiable");
+            }
+            
+            $constructor = $reflector->getConstructor();
+            
+            if (!$constructor) {
+                return new $concrete();
             }
 
-            $dependencies[] = $this->get($type->getName());
+            $parameters = $constructor->getParameters();
+            $dependencies = [];
+
+            foreach ($parameters as $parameter) {
+                $type = $parameter->getType();
+                
+                if (!$type) {
+                    if ($parameter->isDefaultValueAvailable()) {
+                        $dependencies[] = $parameter->getDefaultValue();
+                        continue;
+                    }
+                    
+                    throw new RuntimeException(
+                        "Cannot resolve parameter {$parameter->getName()} without type hint or default value"
+                    );
+                }
+
+                if ($type->isBuiltin()) {
+                    if ($parameter->isDefaultValueAvailable()) {
+                        $dependencies[] = $parameter->getDefaultValue();
+                        continue;
+                    }
+
+                    // Try to get scalar value from container
+                    $paramName = $parameter->getName();
+                    if (isset($this->services[$paramName])) {
+                        $dependencies[] = $this->services[$paramName];
+                        continue;
+                    }
+                    
+                    throw new RuntimeException(
+                        "Cannot resolve scalar parameter {$parameter->getName()} without default value"
+                    );
+                }
+
+                $dependencies[] = $this->get($type->getName());
+            }
+
+            $instance = $reflector->newInstanceArgs($dependencies);
+            $this->resolved[$concrete] = $instance;
+
+            return $instance;
+        } catch (\ReflectionException $e) {
+            throw new RuntimeException("Cannot resolve class $concrete: " . $e->getMessage());
         }
-
-        $instance = $reflector->newInstanceArgs($dependencies);
-        $this->resolved[$concrete] = $instance;
-
-        return $instance;
     }
 }
